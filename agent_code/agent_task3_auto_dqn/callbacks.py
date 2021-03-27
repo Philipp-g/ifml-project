@@ -161,7 +161,9 @@ def state_to_features(self, game_state: dict) -> Optional[torch.Tensor]:
             field_channel[(x, y)] = timer + 11
 
     field_channel = field_channel[1:-1, 1:-1]
-    field_channel_torch = torch.from_numpy(field_channel).float()
-    normalized = (field_channel_torch + 1) / (14 + 1)
-    step_t = torch.Tensor([game_state["step"]])
-    return normalized.unsqueeze(0), step_t / 400
+    normalized = (field_channel + 1) / (14 + 1)
+    with torch.no_grad():
+        normalized_t = torch.from_numpy(normalized).float().cuda()
+        output = self.encoder(normalized_t.flatten().unsqueeze(0)).squeeze(0).cpu()
+        step_t = torch.Tensor([game_state["step"]])
+    return output, step_t / 400

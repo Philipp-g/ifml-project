@@ -14,6 +14,7 @@ class BombNet(nn.Module):
 
     def forward(self, inp):
         state, step = inp
+        state = state.view(state.shape[0], -1)
         x = torch.cat((state, step), 1)
         x = self.fc(x)
         return x

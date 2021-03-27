@@ -1,5 +1,4 @@
 import copy
-import pickle
 import random
 from collections import namedtuple, deque
 import datetime
@@ -15,7 +14,6 @@ import numpy as np
 
 from torch.utils.tensorboard import SummaryWriter
 
-# This is only an example!
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward', 'done'))
 
@@ -187,10 +185,10 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
     x, y = position
     x_old, y_old = old_game_state["self"][3]
-    exploded = [((x, y), t) for ((x, y), t) in old_game_state["bombs"] if t == 0]
-    for (xb, yb), _ in new_game_state["bombs"] + exploded:
+    exploded = [((x, y), t) for ((x, y), t, *_) in old_game_state["bombs"] if t == 0]
+    for (xb, yb), *_ in new_game_state["bombs"] + exploded:
         if xb == x and abs(yb - y) < 4:
-            for (xbo, ybo), _ in old_game_state["bombs"]:
+            for (xbo, ybo), *_ in old_game_state["bombs"]:
                 if xbo == x_old and abs(ybo - y_old) < 4:
                     events.append(e.IN_DANGER)
                 elif ybo == y_old and abs(xbo - x_old) < 4:
@@ -200,7 +198,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
                         # Wasnt in danger but moved into danger
                         events.append(e.MOVED_INTO_DANGER)
         elif yb == y and abs(xb - x) < 4:
-            for (xbo, ybo), _ in old_game_state["bombs"]:
+            for (xbo, ybo), *_ in old_game_state["bombs"]:
                 if xbo == x_old and abs(ybo - y_old) < 4:
                     events.append(e.IN_DANGER)
                 elif ybo == y_old and abs(xbo - x_old) < 4:
@@ -210,7 +208,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
                         # Wasnt in danger but moved into danger
                         events.append(e.MOVED_INTO_DANGER)
         else:
-            for (xbo, ybo), _ in old_game_state["bombs"]:
+            for (xbo, ybo), *_ in old_game_state["bombs"]:
                 if xbo == x_old and abs(ybo - y_old) < 4:
                     events.append(e.MOVED_OUT_OF_DANGER)
                 elif ybo == y_old and abs(xbo - x_old) < 4:
@@ -224,16 +222,10 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         self.event_logger[event] += 1
     rewards = reward_from_events(self, events)
     self.reward.append(rewards)
-    augmented_states = augment_field(old_game_state, new_game_state)
-    for old_state, new_state in augmented_states:
 
-        old_features, old_step = state_to_features(self, old_state)
-        new_features, new_step = state_to_features(self, new_state)
-        old_perm = get_permutations(old_features)
-        new_perm = get_permutations(new_features)
-        action_perm = get_permutations_action(self_action)
-        for old, action, new in zip(old_perm, action_perm, new_perm):
-            self.transitions.append(Transition((old, old_step), action, (new, new_step), rewards, 0))
+    old_features, old_step = state_to_features(self, old_game_state)
+    new_features, new_step = state_to_features(self, new_game_state)
+    self.transitions.append(Transition((old_features, old_step), self_action, (new_features, new_step), rewards, 0))
     self.total_steps += 1
     if len(self.transitions) < config.MINIMAL_TRANSITION_LEN:
         return
@@ -309,10 +301,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.reward.append(rewards)
     old_features, old_step = state_to_features(self, last_game_state)
     new_features, new_step = torch.zeros_like(old_features), old_step + 1
-    old_perm = get_permutations(old_features)
-    action_perm = get_permutations_action(last_action)
-    for old, action in zip(old_perm, action_perm):
-        self.transitions.append(Transition((old, old_step), action, (new_features, new_step), rewards, 1))
+    self.transitions.append(Transition((old_features, old_step), last_action, (new_features, new_step), rewards, 1))
 
     self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
     self.writer.add_scalar("Loss", np.mean(self.loss), round)
@@ -325,12 +314,6 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.writer.add_scalar("Total Actions", steps, round)
     self.writer.add_scalar("Model Actions", self.model_actions, round)
     self.writer.add_scalar("Avg. Reward", np.mean(self.reward), round)
-    # heatmap = np.copy(last_game_state["field"])
-    # for pos in self.positions:
-    #     heatmap[pos] += 1
-    # fig, ax = plt.subplots()
-    # ax.imshow(heatmap, cmap='hot', interpolation='nearest')
-    # self.writer.add_figure("Heatmap", fig, round)
     self.writer.flush()
     # Reset round specific objects
     reset(self)
@@ -352,7 +335,7 @@ def sample_from_transitions(self, batch_size: int) -> Union[
         states.append(transition.state[0])
         states_steps.append(transition.state[1])
         next_states.append(transition.next_state[0])
-        next_states_steps.append(transition.state[1])
+        next_states_steps.append(transition.next_state[1])
         actions.append(config.ACTIONS.index(transition.action))
         rewards.append(transition.reward)
         dones.append(transition.done)
@@ -380,13 +363,11 @@ def reward_from_events(self, events: List[str]) -> float:
     game_rewards = {
         e.WAITED: -0.1,
         e.INVALID_ACTION: -0.1,
-        e.KILLED_SELF: -0.4,
+        e.KILLED_SELF: -0.8,
         e.CRATE_DESTROYED: 1,
         e.BOMB_DROPPED: 0.2,
-        e.COIN_COLLECTED: 4,
-        e.KILLED_OPPONENT: 8,
-        e.GOT_KILLED: -0.4
     }
+
     reward_sum = -0.01
     # good actions are worthless if dead
     if e.KILLED_SELF in events or e.INVALID_ACTION in events:
