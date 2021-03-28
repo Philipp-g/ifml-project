@@ -13,26 +13,28 @@ from .callbacks import look_for_targets
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward', 'done'))
 
-def augment_field(old_game_state : dict, new_game_state : dict) -> Tuple[dict, dict]:
+
+def augment_field(old_game_state: dict, new_game_state: dict) -> Tuple[dict, dict]:
     if old_game_state["step"] < 2:
         return [(old_game_state, new_game_state)]
     augmented_states = []
-    simple_augmented_states = [(old_game_state,new_game_state)]
+    simple_augmented_states = [(old_game_state, new_game_state)]
+    frozen_fields = []
     field = old_game_state["field"]
     me = old_game_state["self"]
-    x,y = me[3]
+    x, y = me[3]
     own_bomb = ()
     for bomb in old_game_state["bombs"]:
         if bomb[2] == me[0]:
             own_bomb = bomb
-    surrounding = [(x,y), (x,y+1), (x,y-1), (x+1, y), (x-1,y)]
+    surrounding = [(x, y), (x, y + 1), (x, y - 1), (x + 1, y), (x - 1, y)]
     bomb_radius = []
     if own_bomb:
-        bx,by = own_bomb[0]
-        for i in range(-3,4):
-            bomb_radius.append((bx+i, by))
+        bx, by = own_bomb[0]
+        for i in range(-3, 4):
+            bomb_radius.append((bx + i, by))
             bomb_radius.append((bx, by + i))
-    bomb_radius = [(x,y) for x,y in bomb_radius if x > 0 and x < 16 and y > 0 and y < 16]
+    bomb_radius = [(x, y) for x, y in bomb_radius if 0 < x < 16 and 0 < y < 16]
     frozen_fields = surrounding + bomb_radius
 
     for other_old, other_new in zip(old_game_state["others"], new_game_state["others"]):
@@ -46,25 +48,25 @@ def augment_field(old_game_state : dict, new_game_state : dict) -> Tuple[dict, d
         old = copy.deepcopy(old_game_state)
         new = copy.deepcopy(new_game_state)
         if bomb[0] not in frozen_fields and bomb[1] > 1:
-            old["bombs"].remove(bomb)
-            new_bomb = (bomb[0], bomb[1]-1, bomb[2])
-            new["bombs"].remove(new_bomb)
+            if old["bombs"] == new["bombs"]:
+                old["bombs"].remove(bomb)
+                new["bombs"].remove(bomb)
+            else:
+                old["bombs"].remove(bomb)
+                new_bomb = (bomb[0], bomb[1] - 1, bomb[2])
+                new["bombs"].remove(new_bomb)
             # Set correct bomb boolean
-            old_others, new_others = [],[]
-            for other_o, other_n in zip(old["others"],new["others"]):
+            old_others, new_others = [], []
+            for other_o, other_n in zip(old["others"], new["others"]):
                 if other_o == bomb[2]:
-                    old_others.append((other_o[0],other_o[1],True, other_o[2]))
+                    old_others.append((other_o[0], other_o[1], True, other_o[2]))
                     new_others.append((other_n[0], other_n[1], True, other_n[2]))
             old["others"] = old_others
             new["others"] = new_others
             simple_augmented_states.append((old, new))
 
-    #mask = np.random.randint(0,2,size=(17,17)).astype(np.bool)
     frozen_fields = np.array(frozen_fields)
-    #mask[frozen_fields[:,0], frozen_fields[:,1]] = False
     not_blocked = field != -1
-    #combined_mask = np.logical_and(mask,not_blocked)
-    #values = np.random.randint(0,2,size=(17,17))
 
     for i in range(32):
         num_crates = (old_game_state["field"] == 1).sum()
@@ -81,6 +83,7 @@ def augment_field(old_game_state : dict, new_game_state : dict) -> Tuple[dict, d
 
     return augmented_states
 
+
 def get_permutations(field):
     permutations = []
     for i in range(4):
@@ -92,6 +95,7 @@ def get_permutations(field):
         permutations.append(permutation)
     return permutations
 
+
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     if old_game_state is None:
         return
@@ -101,23 +105,25 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         return
 
     augmented_states = augment_field(old_game_state, new_game_state)
-    for old_state,_ in augmented_states:
-        old_features, old_step = state_to_features(self, old_state)
+    for old_state, _ in augmented_states:
+        old_features = state_to_features(self, old_state)
+
         old_perm = get_permutations(old_features)
-        self.states.extend(get_permutations(state_to_features(self, old_perm)))
+        self.states.extend(old_perm)
+
 
 def setup_training(self):
     self.others = {}
     self.states = []
 
+
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     round = last_game_state["round"]
-    if round > 400:
+    if round > 49:
         data = np.array(self.states)
-        #data_unique = np.unique(data, axis=0)
+        # data_unique = np.unique(data, axis=0)
         with open("states.npy", "wb") as f:
             np.save(f, data, allow_pickle=False)
-
 
 
 def reward_from_events(self, events: List[str]) -> float:
@@ -128,6 +134,7 @@ def reward_from_events(self, events: List[str]) -> float:
     certain behavior.
     """
     pass
+
 
 def state_to_features(self, game_state: dict) -> Optional[torch.Tensor]:
     """
@@ -158,7 +165,7 @@ def state_to_features(self, game_state: dict) -> Optional[torch.Tensor]:
 
     if game_state["step"] == 1:
         self.others = {}
-        for i, (name, p, b, (x,y)) in enumerate(game_state["others"]):
+        for i, (name, p, b, (x, y)) in enumerate(game_state["others"]):
             self.others[name] = i
 
     field_channel[game_state["self"][3]] = 3
@@ -170,10 +177,8 @@ def state_to_features(self, game_state: dict) -> Optional[torch.Tensor]:
         if owner == game_state["self"][0]:
             field_channel[(x, y)] = timer + 7
         else:
-            field_channel[(x,y)] = timer + 11
+            field_channel[(x, y)] = timer + 11
 
     field_channel = field_channel[1:-1, 1:-1]
-    field_channel_torch = torch.from_numpy(field_channel).float()
-    normalized = (field_channel_torch + 1) / (14 + 1)
-    step_t = torch.Tensor([game_state["step"]])
-    return normalized.unsqueeze(0), step_t / 400
+    normalized = (field_channel + 1) / (14 + 1)
+    return normalized
