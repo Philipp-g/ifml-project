@@ -135,10 +135,25 @@ def act(self, game_state):
     if game_state["round"] != self.current_round:
         reset(self)
         self.current_round = game_state["round"]
-
-    if game_state["step"] > 20:
+    if game_state["round"] % 300 == 0:
+        return "BOMB"
+    if game_state["round"] % 150 == 0:
         action = np.random.choice([action for action in get_allowed(game_state) if action != "BOMB"])
         return action
+    if game_state["round"] % 100 == 0:
+        return "WAIT"
+
+    # if 40 < game_state["step"] < 300 and game_state["round"] < 8000:
+    #     #return "WAIT"
+    #     action = np.random.choice([action for action in get_allowed(game_state) if action != "BOMB"])
+    #     return action
+
+    # if game_state["round"] > 8000 and game_state["round"] % 5 == 0 and 40 < game_state["step"] < 150:
+    #     action = np.random.choice([action for action in get_allowed(game_state) if action != "BOMB"])
+    #     return action
+    # if game_state["round"] % 5 == 0 and 40 < game_state["step"] < 150:
+    #     action = np.random.choice([action for action in get_allowed(game_state) if action != "BOMB"])
+    #     return action
     # Gather information about the game state
     arena = game_state['field']
     _, score, bombs_left, (x, y) = game_state['self']
