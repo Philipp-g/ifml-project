@@ -22,7 +22,7 @@ AGENT_API = {
     "train": {
         "setup_training": ["self"],
         "game_events_occurred": ["self", "old_game_state: dict", "self_action: str", "new_game_state: dict", "events: List[str]"],
-        # "enemy_game_events_occurred": ["self", "enemy_name: str", "old_enemy_game_state: dict", "enemy_action: str", "enemy_game_state: dict", "enemy_events: List[str]"],
+        "enemy_game_events_occurred": ["self", "enemy_name: str", "old_enemy_game_state: dict", "enemy_action: str", "enemy_game_state: dict", "enemy_events: List[str]"],
         "end_of_round": ["self", "last_game_state: dict", "last_action: str", "events: List[str]"]
     }
 }
@@ -124,11 +124,11 @@ class Agent:
     def wait_for_game_event_processing(self):
         self.backend.get("game_events_occurred")
 
-#    def process_enemy_game_events(self, enemy_game_state, enemy: "Agent"):
-#        self.backend.send_event("enemy_game_events_occurred", enemy.name, enemy.last_game_state, enemy.last_action, enemy_game_state, enemy.events)
-#
-#    def wait_for_enemy_game_event_processing(self):
-#        self.backend.get("enemy_game_events_occurred")
+    def process_enemy_game_events(self, enemy_game_state, enemy: "Agent"):
+        self.backend.send_event("enemy_game_events_occurred", enemy.name, enemy.last_game_state, enemy.last_action, enemy_game_state, enemy.events)
+
+    def wait_for_enemy_game_event_processing(self):
+        self.backend.get("enemy_game_events_occurred")
 
     def store_game_state(self, game_state):
         self.last_game_state = game_state

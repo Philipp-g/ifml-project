@@ -16,6 +16,7 @@ import settings as s
 from agents import Agent, SequentialAgentBackend
 from fallbacks import pygame
 from items import Coin, Explosion, Bomb
+import glob
 
 WorldArgs = namedtuple("WorldArgs",
                        ["no_gui", "fps", "turn_based", "update_interval", "save_replay", "replay", "make_video", "continue_without_training"])
@@ -409,16 +410,16 @@ class BombeRLeWorld(GenericWorld):
                     a.process_game_events(self.get_state_for_agent(a))
                 for enemy in self.active_agents:
                     if enemy is not a:
-                        pass
-                        # a.process_enemy_game_events(self.get_state_for_agent(enemy), enemy)
+                        #pass
+                        a.process_enemy_game_events(self.get_state_for_agent(enemy), enemy)
         for a in self.agents:
             if a.train:
                 if not a.dead:
                     a.wait_for_game_event_processing()
                 for enemy in self.active_agents:
                     if enemy is not a:
-                        pass
-                        # a.wait_for_enemy_game_event_processing()
+                        #pass
+                        a.wait_for_enemy_game_event_processing()
         for a in self.active_agents:
             a.store_game_state(self.get_state_for_agent(a))
             a.reset_game_events()
@@ -481,6 +482,8 @@ class BombeRLeWorld(GenericWorld):
         self.ready_for_restart_flag.set()
 
     def end(self):
+        for a in self.agents:
+            print(a.name, a.total_score)
         if self.running:
             self.end_round()
         self.logger.info('SHUT DOWN')
@@ -508,6 +511,15 @@ class GUI:
         self.background.fill((0, 0, 0))
         self.t_wall = pygame.image.load('assets/brick.png')
         self.t_crate = pygame.image.load('assets/crate.png')
+
+        self.overlays = {}
+        for file in glob.glob("agent_code/grad_cam/output/*.jpeg"):
+            if file.endswith('.jpeg'):
+                key = file[:-5].split("/")[-1]
+                img = pygame.image.load(file).convert()
+                img.set_alpha(128)
+                img = pygame.transform.scale(img, (450, 450))
+                self.overlays[key] = img
 
         # Font for scores and such
         font_name = dirname(__file__) + '/assets/emulogic.ttf'
@@ -563,6 +575,8 @@ class GUI:
         # Explosions
         for explosion in self.world.explosions:
             explosion.render(self.screen)
+        if hasattr(self.world, "replay_file"):
+            self.screen.blit(self.overlays[f"{self.world.step+1}"], (s.GRID_OFFSET[0] + s.GRID_SIZE, s.GRID_OFFSET[1] + s.GRID_SIZE))
 
         # Scores
         # agents = sorted(self.agents, key=lambda a: (a.score, -a.mean_time), reverse=True)
