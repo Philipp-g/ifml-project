@@ -36,8 +36,6 @@ def setup(self):
         self.model_online = BombNet(config.INPUT_DIMS, len(config.ACTIONS)).float().cuda()
         checkpoint = torch.load(config.LOAD_PATH)
         self.model_online.load_state_dict(checkpoint['model_state_dict'])
-        # self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        # self.model.eval()
     self.explore_prob = config.INITIAL_EXPLORE_PROB
     self.model_actions = 0
     self.model_target = copy.deepcopy(self.model_online)
@@ -106,15 +104,14 @@ def act(self, game_state: dict) -> str:
     self.explore_prob *= config.EXPLORE_DECAY
     self.explore_prob = max(config.MINIMAL_EXPLORE_PROB, self.explore_prob)
     self.logger.debug(f"ACT RETURN: {config.ACTIONS[action_index]}")
-    # TODO REMOVE
-    if not self.train:
-        if game_state["round"] % 300 == 0:
-            return "BOMB"
-        if game_state["round"] % 150 == 0:
-            action = np.random.choice([action for action in get_allowed(game_state) if action != "BOMB"])
-            return action
-        if game_state["round"] % 100 == 0:
-            return "WAIT"
+    # if not self.train:
+    #     if game_state["round"] % 300 == 0:
+    #         return "BOMB"
+    #     if game_state["round"] % 150 == 0:
+    #         action = np.random.choice([action for action in get_allowed(game_state) if action != "BOMB"])
+    #         return action
+    #     if game_state["round"] % 100 == 0:
+    #         return "WAIT"
     return config.ACTIONS[action_index]
 
 
